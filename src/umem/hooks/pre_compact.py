@@ -244,7 +244,7 @@ def main() -> None:
     session_id = str(data.get("session_id") or uuid.uuid4().hex[:16])
     transcript_path = str(data.get("transcript_path") or "")
     trigger = str(data.get("trigger") or "auto")
-    cwd = str(data.get("cwd") or os.getcwd())
+    cwd = str(Path(data.get("cwd") or os.getcwd()).resolve())
 
     from umem.config import detect_project
     project = detect_project(cwd) or "global"

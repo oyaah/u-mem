@@ -121,7 +121,7 @@ def mem_compact_snapshot(project: str | None = None) -> dict[str, Any]:
 
     Install hooks with `u-mem-setup --hooks` for automatic injection.
     """
-    cwd = str(Path.cwd())
+    cwd = str(Path.cwd().resolve())
     restore_file = compact_restore_path(cwd)
     fast_restore: dict[str, Any] = {}
     try:

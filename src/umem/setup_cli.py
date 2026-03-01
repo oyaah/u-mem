@@ -65,7 +65,7 @@ def _install_hooks(settings_path: Path) -> str:
     hooks["PreCompact"] = pre
 
     ss = [h for h in (hooks.get("SessionStart") or []) if not _is_umem_entry(h)]
-    ss.insert(0, {"matcher": "compact", "hooks": [{"type": "command", "command": "umem-session-start", "timeout": 10}]})
+    ss.insert(0, {"hooks": [{"type": "command", "command": "umem-session-start", "timeout": 10}]})
     hooks["SessionStart"] = ss
 
     data["hooks"] = hooks
