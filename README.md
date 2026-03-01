@@ -1,91 +1,54 @@
-# u-mem
+# u-mem 🧠
 
-Persistent memory for Claude Code. Survives compaction. Zero cloud.
+**Persistent memory for Claude Code. Survives compaction. Zero cloud. One command to install.**
 
-```
+```bash
 pip install u-mem
 u-mem-setup --mcp --hooks
 ```
 
-That's it. Every Claude Code session now has memory.
+Restart Claude Code. Done.
 
 ---
 
 ## The problem
 
-Claude Code forgets everything when the context window compacts — which it does silently, mid-task. You come back after a break, open a project, and Claude asks you to re-explain the architecture you walked through two hours ago. Every. Single. Time.
+Claude Code compacts the context window silently mid-session. When it does, everything you built up — architecture decisions, debugging context, your current task — is gone.
 
-Without u-mem:
-- You describe your auth system on Monday. Wednesday it's gone.
-- You decide on a pattern ("always use the repository layer, never query from controllers"). Gone after first compaction.
-- You debug a nasty SQLite locking bug for 40 minutes. Compact. You'll debug it again.
-- You paste the same context paragraph at the start of every session.
-
-With u-mem:
-- Claude opens your project and already knows your recent decisions.
-- When a compact fires, your session state is checkpointed automatically.
-- After the compact, Claude picks up exactly where it left off.
-- No tool calls required. It happens in the background.
+Without u-mem, you spend your time:
+- 🔁 Re-explaining your project structure every few hours
+- 😤 Re-debugging things you already solved
+- 📋 Pasting the same context paragraphs at the start of every session
+- 🤦 Watching Claude suggest the exact pattern you told it not to use
 
 ---
 
-## How it works
+## What u-mem does
 
-**SQLite + FTS5** stores memories locally at `~/.umem/memories.db`. No cloud, no API keys, no data leaving your machine. BM25 full-text search (same algorithm as Elasticsearch) with a Porter stemmer — "decided" matches "decision", "using" matches "used". Lookup is fast because it's an indexed virtual table, not a `LIKE '%query%'` scan.
+**Survives compaction** — hooks into Claude Code's lifecycle to checkpoint your session before the compact fires, then restores it automatically after. Claude wakes up knowing exactly where it left off.
 
-**MCP (Model Context Protocol)** exposes five tools to Claude via stdio transport. Claude calls them; u-mem reads/writes the SQLite database. This is the same protocol Anthropic built for tool-use extensibility — it means u-mem also works with Cursor, Windsurf, Codex, and Gemini CLI, not just Claude Code.
+**Passive context injection** — at every session start, your recent project memories are injected into Claude's context without any tool call. Claude already knows what you're working on when you open a project.
 
-**Hooks** are where the magic is. Claude Code fires `PreCompact` before it compacts the context, and `SessionStart` on every session. u-mem hooks into both:
-
-```
-PreCompact  →  reads the JSONL transcript → extracts files you edited,
-               commands you ran, decisions you made, the last thing you
-               asked for → writes a structured snapshot to ~/.umem/compacts/
-
-SessionStart → if post-compact: injects that snapshot back as additionalContext
-               so Claude wakes up knowing exactly where it was
-             → if normal start: injects your 8 most recent project memories
-               so relevant context is always present without any tool call
-```
-
-The cwd is hashed (`sha256[:16]`) to key the compact snapshot per-project, so opening project A never injects project B's state.
+**Searchable memory** — tell Claude to save decisions, patterns, or facts. They persist across sessions, compactions, and restarts. Search them anytime.
 
 ---
 
 ## Install
-
-Requires Python 3.11+.
 
 ```bash
 pip install u-mem
 u-mem-setup --mcp --hooks
 ```
 
-`--mcp` adds u-mem to `~/.claude/mcp.json` so Claude can call the memory tools.
+> Requires Python 3.11+
+
+`--mcp` wires u-mem into `~/.claude/mcp.json` so Claude can call the memory tools.
 `--hooks` registers the PreCompact and SessionStart hooks in `~/.claude/settings.json`.
 
-Restart Claude Code after setup.
-
-To verify:
+Verify setup:
 ```bash
 u-mem-setup --status
 ```
-
----
-
-## Tools
-
-Claude gets five tools:
-
-| Tool | What it does |
-|---|---|
-| `mem_save` | Save a memory (decision, fact, context) with optional tags and importance 1–5 |
-| `mem_search` | BM25 full-text search across memories. Returns compact previews |
-| `mem_get` | Fetch full content for specific IDs from search results |
-| `mem_recent` | Most recent memories, newest first. Good for quick context bootstrap |
-| `mem_compact_snapshot` | Read the pre-compact session checkpoint for manual recovery |
-
-Memories are scoped to projects (auto-detected from git root) or global.
 
 ---
 
@@ -93,56 +56,84 @@ Memories are scoped to projects (auto-detected from git root) or global.
 
 Tell Claude what to remember:
 
-> "remember that we're using the repository pattern here — controllers never query the DB directly"
+> *"Remember that we're using the repository pattern — controllers never query the DB directly"*
 
-> "save that the auth token lives in X-Auth-Token header, not Authorization"
+> *"Save that the auth token goes in X-Auth-Token, not Authorization"*
 
-> "note: the test database needs to be reset before the integration suite runs"
+> *"Note: the integration test DB needs to be reset before the full suite"*
 
-Claude calls `mem_save` and it persists across sessions, compactions, and restarts.
+Recall it later:
 
-Search your own memory:
-> "what did we decide about caching?"
+> *"What did we decide about caching?"*
 
-Claude calls `mem_search("caching")` and surfaces what it saved.
+> *"What were we working on last session?"*
+
+That's it. The compaction survival and session injection happen automatically in the background.
 
 ---
 
-## Project-scoped memory
+## How it works
 
-u-mem detects your project from the git root. Memories saved in `/my-app` stay in `/my-app`. The SessionStart hook only injects memories for the current project — you won't see your other project's context bleed in.
+### 🗄️ Storage — SQLite + FTS5
 
-You can also save global memories (no project scope) for things that apply everywhere:
+Memories live in `~/.umem/memories.db`. **FTS5** (SQLite's full-text search extension) gives BM25 relevance ranking with a Porter stemmer — "decided" matches "decision", "fixing" matches "fixed". Lookups are fast because it's an indexed virtual table, not a `LIKE '%..%'` scan.
 
-```python
-# Claude calls this
-mem_save("always use UTC for timestamps", project="global", importance=5)
+Content-addressed IDs (`sha256[:16]`) make saves idempotent — saving the same memory twice is a no-op.
+
+### 🔌 MCP — Model Context Protocol
+
+Five tools are exposed to Claude over stdio. Claude calls them; u-mem reads/writes the database. Because it's standard MCP, it also works with **Cursor, Windsurf, Codex, and Gemini CLI** — not just Claude Code.
+
+### 🪝 Hooks — the compaction survival layer
+
+Two hooks do the real work:
+
+```
+PreCompact ──► reads JSONL transcript ──► extracts files edited, commands run,
+               decisions made, current task ──► writes snapshot to ~/.umem/compacts/
+
+SessionStart ─► post-compact: injects snapshot as additionalContext (Claude wakes up)
+              ─► normal start: injects 8 most recent project memories (always in context)
 ```
 
----
-
-## What gets checkpointed before a compact
-
-The PreCompact hook parses the JSONL transcript and extracts:
-
-- Files you edited (from `Edit`, `Write`, `NotebookEdit` tool calls)
-- Bash commands you ran
-- Decision sentences from Claude's responses (filtered by keywords: "decided", "because", "fixed", "resolved", "important", etc.)
-- Error lines (sentences mentioning bugs, exceptions, failures)
-- Your last user message (treated as the active task)
-
-This structured snapshot is written to `~/.umem/compacts/{cwd_hash}.json` and read back immediately after compaction via the SessionStart hook.
+The CWD is hashed (`sha256[:16]`) to key snapshots per-project. Opening project A never injects project B's state.
 
 ---
 
-## Data
+## Tools
 
-Everything lives at `~/.umem/`. Nothing goes anywhere else.
+| Tool | What it does |
+|---|---|
+| `mem_save` | Save a memory with optional tags and importance 1–5 |
+| `mem_search` | BM25 full-text search. Returns compact previews |
+| `mem_get` | Fetch full content for specific IDs |
+| `mem_recent` | Most recent memories, newest first |
+| `mem_compact_snapshot` | Read the pre-compact checkpoint for manual recovery |
+
+---
+
+## What gets checkpointed
+
+Before every compaction, u-mem parses your session transcript and extracts:
+
+- 📝 **Files you edited** — from `Edit`, `Write`, `NotebookEdit` tool calls
+- 💻 **Commands you ran** — from `Bash` tool calls
+- 🧭 **Decision sentences** — Claude responses mentioning "decided", "fixed", "important", "resolved", etc.
+- ⚠️ **Error lines** — sentences mentioning bugs, exceptions, failures
+- 🎯 **Your last message** — treated as the active task
+
+This is what Claude reads when it comes back after a compact.
+
+---
+
+## Data & privacy
+
+Everything lives at `~/.umem/`. Nothing leaves your machine.
 
 ```
 ~/.umem/
-  memories.db        # SQLite database (WAL mode)
-  compacts/          # Per-project compact snapshots
+  memories.db      # SQLite database (WAL mode)
+  compacts/        # Per-project compact snapshots
 ```
 
 ---
