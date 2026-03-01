@@ -65,7 +65,7 @@ class TestMemSearch:
         isolated_server.mem_save(content=long, project="p")
         r = isolated_server.mem_search(query="architecture", project="p")
         assert r["count"] >= 1
-        assert len(r["results"][0]["preview"]) <= 120
+        assert len(r["results"][0]["preview"]) <= 150
 
 
 class TestMemGet:

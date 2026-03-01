@@ -18,10 +18,11 @@ import json
 import os
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
-from .utils import compact_restore_path, cwd_hash, read_stdin_json  # noqa: F401 (cwd_hash re-exported for tests)
+from .utils import compact_restore_path, read_stdin_json
 
 
 # Keywords that flag a sentence as a decision or finding worth saving.

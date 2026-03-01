@@ -4,13 +4,31 @@ build-backend = "hatchling.build"
 
 [project]
 name = "u-mem"
-version = "0.1.0"
+version = "0.2.0"
+description = "Persistent memory for Claude Code. Survives compaction. Zero cloud. One command to install."
+readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "oyaah" }]
+keywords = ["claude", "mcp", "memory", "claude-code", "ai", "context", "llm"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = ["mcp[cli]>=1.9"]
 
+[project.urls]
+Homepage = "https://github.com/oyaah/u-mem"
+Repository = "https://github.com/oyaah/u-mem"
+"Bug Tracker" = "https://github.com/oyaah/u-mem/issues"
+
 [project.scripts]
-u-mem        = "umem.server:main"
-u-mem-setup  = "umem.setup_cli:main"
+u-mem              = "umem.server:main"
+u-mem-setup        = "umem.setup_cli:main"
 umem-pre-compact   = "umem.hooks.pre_compact:main"
 umem-session-start = "umem.hooks.session_start:main"
 

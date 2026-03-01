@@ -70,13 +70,15 @@ class Database:
 
     def save(self, content: str, project: str = "global", tags: list[str] | None = None,
              importance: int = 3, session_id: str | None = None) -> str:
+        if not content.strip():
+            raise ValueError("content must not be empty")
         mem_id = _id(content)
         now = time.time()
         tags_json = json.dumps(tags or [])
         if self._conn.execute("SELECT 1 FROM memories WHERE id=?", (mem_id,)).fetchone():
             self._conn.execute(
-                "UPDATE memories SET updated_at=?, importance=?, tags=? WHERE id=?",
-                (now, importance, tags_json, mem_id),
+                "UPDATE memories SET updated_at=?, project=?, importance=?, tags=? WHERE id=?",
+                (now, project, importance, tags_json, mem_id),
             )
         else:
             self._conn.execute(

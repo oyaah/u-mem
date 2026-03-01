@@ -35,6 +35,8 @@ def mem_save(
     tags:       optional list of string tags for filtering
     importance: 1 (ephemeral) to 5 (critical), default 3
     """
+    if not content.strip():
+        return {"error": "content must not be empty", "saved": False}
     proj = project or detect_project()
     importance = max(1, min(5, importance))
     mem_id = _get_db().save(content, project=proj, tags=tags, importance=importance)
@@ -55,8 +57,20 @@ def mem_search(
     project: filter by project (None = search all projects)
     limit:   max results, default 20
     """
+    if not query.strip():
+        return {"count": 0, "results": [], "error": "query must not be empty"}
     limit = max(1, min(50, limit))
-    results = _get_db().search(query, project=project, limit=limit)
+    try:
+        results = _get_db().search(query, project=project, limit=limit)
+    except Exception:
+        # FTS5 rejects certain query syntax (bare minus, invalid NEAR, etc.)
+        # Fall back to a safe literal search.
+        import re as _re
+        safe = _re.sub(r'[^\w\s]', ' ', query).strip()
+        try:
+            results = _get_db().search(safe, project=project, limit=limit) if safe else []
+        except Exception:
+            results = []
     return {
         "count": len(results),
         "results": [
@@ -65,7 +79,7 @@ def mem_search(
                 "project": r["project"],
                 "importance": r["importance"],
                 "tags": r["tags"],
-                "preview": r["content"][:120],
+                "preview": r["content"][:150],
                 "created_at": r["created_at"],
             }
             for r in results
@@ -103,7 +117,7 @@ def mem_recent(
                 "project": r["project"],
                 "importance": r["importance"],
                 "tags": r["tags"],
-                "preview": r["content"][:200],
+                "preview": r["content"][:150],
                 "created_at": r["created_at"],
             }
             for r in results
@@ -112,7 +126,7 @@ def mem_recent(
 
 
 @mcp.tool()
-def mem_compact_snapshot(project: str | None = None) -> dict[str, Any]:
+def mem_compact_snapshot() -> dict[str, Any]:
     """
     Read the pre-compact session snapshot for the current project.
 
